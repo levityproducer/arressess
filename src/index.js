@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Routes, REST } from "discord.js";
+import { Client, GatewayIntentBits, Routes, REST, ActivityType } from "discord.js";
 import { commandData, handleCommand, handleAutocomplete } from "./commands.js";
 import { startPolling } from "./poller.js";
 
@@ -16,6 +16,18 @@ client.once("clientReady", async () => {
   const rest = new REST().setToken(DISCORD_TOKEN);
   await rest.put(Routes.applicationCommands(APP_ID), { body: [commandData] });
   console.log("Slash commands registered.");
+
+  client.user.setPresence({
+    activities: [{ type: ActivityType.Custom, name: "status", state: "serving RSS 📡" }],
+    status: "online",
+  });
+
+  await client.application.edit({
+    description:
+      "I am a simple RSS bot! 📰 I represent iggy and Fable's desire to assist you! ✨\n" +
+      "https://github.com/levityproducer/arressess",
+  });
+  console.log("Presence and bio set.");
 
   startPolling(client, Number(POLL_INTERVAL_SECONDS) * 1000);
 });
