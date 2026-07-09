@@ -40,10 +40,20 @@ async function pollFeed(client, feed) {
 
   for (const item of fresh) db.markSeen.run(feed.id, itemGuid(item));
 
-  let webhook = await getChannelWebhook(client, feed);
-  if (!webhook) return;
+  await postItems(client, feed, parsed, toPost);
+}
 
-  for (const item of toPost) {
+// Posts items to the feed's channel under its pseudo-identity.
+// Returns false if the channel webhook can't be obtained (e.g. missing
+// Manage Webhooks permission).
+export async function postItems(client, feed, parsed, items) {
+  const title = feedDisplayName(feed, parsed);
+  const avatar = feedAvatar(feed, parsed);
+
+  let webhook = await getChannelWebhook(client, feed);
+  if (!webhook) return false;
+
+  for (const item of items) {
     if (!item.link) continue;
     const message = {
       // Post the bare link — Discord unfurls it with the site's OpenGraph data.
@@ -58,10 +68,11 @@ async function pollFeed(client, feed) {
       if (err.code !== 10015) throw err; // 10015 = Unknown Webhook (deleted by hand)
       db.deleteWebhook.run(feed.channel_id);
       webhook = await getChannelWebhook(client, feed);
-      if (!webhook) return;
+      if (!webhook) return false;
       await webhook.send(message);
     }
   }
+  return true;
 }
 
 // Marks every current item as seen without posting, so a newly added feed

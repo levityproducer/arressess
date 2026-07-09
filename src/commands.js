@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import * as db from "./db.js";
 import { resolveFeed, feedDisplayName, feedAvatar } from "./feeds.js";
-import { primeFeed } from "./poller.js";
+import { primeFeed, postItems } from "./poller.js";
 
 export const commandData = new SlashCommandBuilder()
   .setName("feed")
@@ -99,8 +99,21 @@ async function handleAdd(interaction) {
   // Don't dump the backlog — only entries published from now on get posted.
   await primeFeed(feedId, parsed);
 
+  // Post the most recent entry right away, as a sample and a live check
+  // that the bot can actually post in the channel.
+  const latest = (parsed.items || []).find((item) => item.link);
+  const feed = db.getFeed.get(feedId);
+  const posted = latest ? await postItems(interaction.client, feed, parsed, [latest]) : false;
+
+  if (latest && !posted) {
+    return interaction.editReply(
+      `Watching **${parsed.title || url}**, but I couldn't post in <#${channel.id}> — ` +
+        `make sure I have the **Manage Webhooks** permission there.`
+    );
+  }
   return interaction.editReply(
-    `Watching **${parsed.title || url}** — new entries will be posted in <#${channel.id}>.`
+    `Watching **${parsed.title || url}** — new entries will be posted in <#${channel.id}>.` +
+      (posted ? " Here's the most recent one as a sample. ☝️" : "")
   );
 }
 
