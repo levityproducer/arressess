@@ -5,7 +5,7 @@ import {
   MessageFlags,
 } from "discord.js";
 import * as db from "./db.js";
-import { fetchFeed, feedDisplayName, feedAvatar } from "./feeds.js";
+import { resolveFeed, feedDisplayName, feedAvatar } from "./feeds.js";
 import { primeFeed } from "./poller.js";
 
 export const commandData = new SlashCommandBuilder()
@@ -64,17 +64,17 @@ export async function handleCommand(interaction) {
 }
 
 async function handleAdd(interaction) {
-  const url = interaction.options.getString("url", true);
+  const inputUrl = interaction.options.getString("url", true);
   const channel = interaction.options.getChannel("channel") ?? interaction.channel;
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  let parsed;
+  let url, parsed;
   try {
-    parsed = await fetchFeed(url);
+    ({ url, parsed } = await resolveFeed(inputUrl));
   } catch (err) {
     return interaction.editReply(
-      `Couldn't read a feed at that URL: ${err.message}`
+      `Couldn't find a feed at that URL: ${err.message}`
     );
   }
 
