@@ -24,7 +24,7 @@ point are posted.
 ```sh
 npm install
 cp .env.example .env   # fill in DISCORD_TOKEN
-npm start
+npm run dev
 ```
 
 State lives in `data/arressess.db` (SQLite). The bot polls every
