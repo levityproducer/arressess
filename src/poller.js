@@ -50,7 +50,26 @@ export async function postItems(client, feed, parsed, items) {
   const title = feedDisplayName(feed, parsed);
   const avatar = feedAvatar(feed, parsed);
 
-  let webhook = await getChannelWebhook(client, feed);
+  const channel = await client.channels.fetch(feed.channel_id).catch(() => null);
+  if (!channel) {
+    console.error(`channel ${feed.channel_id} unavailable for feed ${feed.id}`);
+    return false;
+  }
+
+  // DM channels can't have webhooks, so no per-feed identity — send as the
+  // bot with the feed name as a header instead.
+  if (channel.isDMBased()) {
+    for (const item of items) {
+      if (!item.link) continue;
+      await channel.send({
+        content: `**${title}** 📡\n${item.link}`,
+        allowedMentions: { parse: [] },
+      });
+    }
+    return true;
+  }
+
+  let webhook = await getChannelWebhook(channel, feed);
   if (!webhook) return false;
 
   for (const item of items) {
@@ -67,7 +86,7 @@ export async function postItems(client, feed, parsed, items) {
     } catch (err) {
       if (err.code !== 10015) throw err; // 10015 = Unknown Webhook (deleted by hand)
       db.deleteWebhook.run(feed.channel_id);
-      webhook = await getChannelWebhook(client, feed);
+      webhook = await getChannelWebhook(channel, feed);
       if (!webhook) return false;
       await webhook.send(message);
     }
@@ -83,15 +102,14 @@ export async function primeFeed(feedId, parsed) {
   }
 }
 
-async function getChannelWebhook(client, feed) {
+async function getChannelWebhook(channel, feed) {
   const cached = db.getWebhook.get(feed.channel_id);
   if (cached) {
     return new WebhookClient({ id: cached.webhook_id, token: cached.webhook_token });
   }
 
-  const channel = await client.channels.fetch(feed.channel_id).catch(() => null);
-  if (!channel || !channel.createWebhook) {
-    console.error(`channel ${feed.channel_id} unavailable for feed ${feed.id}`);
+  if (!channel.createWebhook) {
+    console.error(`channel ${feed.channel_id} can't have webhooks (feed ${feed.id})`);
     return null;
   }
 

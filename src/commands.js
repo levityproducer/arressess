@@ -3,6 +3,7 @@ import {
   PermissionFlagsBits,
   ChannelType,
   MessageFlags,
+  InteractionContextType,
 } from "discord.js";
 import * as db from "./db.js";
 import { resolveFeed, feedDisplayName, feedAvatar } from "./feeds.js";
@@ -10,8 +11,9 @@ import { primeFeed, postItems } from "./poller.js";
 
 export const commandData = new SlashCommandBuilder()
   .setName("feed")
-  .setDescription("Manage RSS feeds for this server")
+  .setDescription("Manage RSS feeds for this server (or your DMs)")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((sub) =>
     sub
       .setName("add")
@@ -43,8 +45,14 @@ export const commandData = new SlashCommandBuilder()
   )
   .toJSON();
 
+// Feeds are scoped to a guild, or to a user's DM when there is no guild.
+// The scope is stored in the feeds.guild_id column.
+function scopeOf(interaction) {
+  return interaction.guildId ?? `dm:${interaction.user.id}`;
+}
+
 export async function handleAutocomplete(interaction) {
-  const feeds = db.listFeedsForGuild.all(interaction.guildId);
+  const feeds = db.listFeedsForGuild.all(scopeOf(interaction));
   const query = interaction.options.getFocused().toLowerCase();
   const choices = feeds
     .map((f) => ({
@@ -65,7 +73,10 @@ export async function handleCommand(interaction) {
 
 async function handleAdd(interaction) {
   const inputUrl = interaction.options.getString("url", true);
-  const channel = interaction.options.getChannel("channel") ?? interaction.channel;
+  const channelId =
+    interaction.options.getChannel("channel")?.id ?? interaction.channelId;
+  const inDM = !interaction.guildId;
+  const where = inDM ? "right here in our DMs" : `<#${channelId}>`;
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -81,8 +92,8 @@ async function handleAdd(interaction) {
   let feedId;
   try {
     const result = db.addFeed.run(
-      interaction.guildId,
-      channel.id,
+      scopeOf(interaction),
+      channelId,
       url,
       feedDisplayName({ url }, parsed),
       feedAvatar({ url }, parsed),
@@ -91,7 +102,7 @@ async function handleAdd(interaction) {
     feedId = result.lastInsertRowid;
   } catch (err) {
     if (String(err.message).includes("UNIQUE")) {
-      return interaction.editReply(`That feed is already being watched in <#${channel.id}>.`);
+      return interaction.editReply(`That feed is already being watched ${inDM ? "in our DMs" : `in ${where}`}.`);
     }
     throw err;
   }
@@ -107,12 +118,12 @@ async function handleAdd(interaction) {
 
   if (latest && !posted) {
     return interaction.editReply(
-      `Watching **${parsed.title || url}**, but I couldn't post in <#${channel.id}> — ` +
+      `Watching **${parsed.title || url}**, but I couldn't post in ${where} — ` +
         `make sure I have the **Manage Webhooks** permission there.`
     );
   }
   return interaction.editReply(
-    `Watching **${parsed.title || url}** — new entries will be posted in <#${channel.id}>.` +
+    `Watching **${parsed.title || url}** — new entries will be posted ${inDM ? where : `in ${where}`}.` +
       (posted ? " Here's the most recent one as a sample. ☝️" : "")
   );
 }
@@ -120,13 +131,13 @@ async function handleAdd(interaction) {
 async function handleRemove(interaction) {
   const feedId = interaction.options.getInteger("feed", true);
   const feed = db.getFeed.get(feedId);
-  if (!feed || feed.guild_id !== interaction.guildId) {
+  if (!feed || feed.guild_id !== scopeOf(interaction)) {
     return interaction.reply({
-      content: "No such feed on this server.",
+      content: "No such feed here.",
       flags: MessageFlags.Ephemeral,
     });
   }
-  db.removeFeed.run(feedId, interaction.guildId);
+  db.removeFeed.run(feedId, scopeOf(interaction));
   return interaction.reply({
     content: `Stopped watching **${feed.title || feed.url}**.`,
     flags: MessageFlags.Ephemeral,
@@ -134,7 +145,7 @@ async function handleRemove(interaction) {
 }
 
 async function handleList(interaction) {
-  const feeds = db.listFeedsForGuild.all(interaction.guildId);
+  const feeds = db.listFeedsForGuild.all(scopeOf(interaction));
   if (feeds.length === 0) {
     return interaction.reply({
       content: "No feeds yet. Add one with `/feed add`.",
@@ -142,7 +153,10 @@ async function handleList(interaction) {
     });
   }
   const lines = feeds.map(
-    (f) => `\`#${f.id}\` **${f.title || f.url}** → <#${f.channel_id}>\n<${f.url}>`
+    (f) =>
+      `\`#${f.id}\` **${f.title || f.url}** → ${
+        f.guild_id.startsWith("dm:") ? "our DMs 💌" : `<#${f.channel_id}>`
+      }\n<${f.url}>`
   );
   return interaction.reply({
     content: lines.join("\n").slice(0, 2000),

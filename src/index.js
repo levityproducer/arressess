@@ -24,7 +24,8 @@ client.once("clientReady", async () => {
 
   await client.application.edit({
     description:
-      "I am a simple RSS bot! 📰 I represent iggy and Fable's desire to assist you! ✨\n" +
+      "I am a simple RSS bot! 📰\n" +
+      "I represent iggy and Fable's desire to assist you! ✨\n" +
       "https://github.com/levityproducer/arressess",
   });
   console.log("Presence and bio set.");
