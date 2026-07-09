@@ -22,13 +22,18 @@ client.once("clientReady", async () => {
     status: "online",
   });
 
-  await client.application.edit({
-    description:
-      "I am a simple RSS bot! 📰\n" +
-      "I represent iggy and Fable's desire to assist you! ✨\n" +
-      "https://github.com/levityproducer/arressess",
+  // Sets the bio and enables both server install and user install
+  // (user install lets people DM the bot without any shared server).
+  await rest.patch(Routes.currentApplication(), {
+    body: {
+      description:
+        "I am a simple RSS bot! 📰\n" +
+        "I represent iggy and Fable's desire to assist you! ✨\n" +
+        "https://github.com/levityproducer/arressess",
+      integration_types_config: { 0: {}, 1: {} },
+    },
   });
-  console.log("Presence and bio set.");
+  console.log("Presence, bio, and install settings set.");
 
   startPolling(client, Number(POLL_INTERVAL_SECONDS) * 1000);
 });

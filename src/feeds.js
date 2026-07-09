@@ -65,9 +65,11 @@ export function feedDisplayName(feed, parsed) {
 export function feedAvatar(feed, parsed) {
   if (parsed?.image?.url) return parsed.image.url;
   const host = hostnameOf(feed.url);
-  return host
-    ? `https://www.google.com/s2/favicons?domain=${host}&sz=128`
-    : null;
+  if (!host) return null;
+  // Serves the site favicon as a PNG with no redirect — Discord's image
+  // proxy won't follow redirects for webhook avatars, so the more common
+  // google.com/s2/favicons URL (a 301) shows as the default avatar.
+  return `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${host}&size=128`;
 }
 
 function hostnameOf(url) {

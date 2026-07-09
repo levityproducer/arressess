@@ -41,3 +41,8 @@ State lives in `data/arressess.db` (SQLite). The bot polls every
    ```
    https://discord.com/oauth2/authorize?client_id=1524834504915681340&scope=bot+applications.commands&permissions=536889344
    ```
+3. Or install it to your own account (no server needed) and DM it feeds:
+
+   ```
+   https://discord.com/oauth2/authorize?client_id=1524834504915681340&integration_type=1&scope=applications.commands
+   ```

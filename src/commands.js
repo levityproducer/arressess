@@ -4,6 +4,7 @@ import {
   ChannelType,
   MessageFlags,
   InteractionContextType,
+  ApplicationIntegrationType,
 } from "discord.js";
 import * as db from "./db.js";
 import { resolveFeed, feedDisplayName, feedAvatar } from "./feeds.js";
@@ -14,6 +15,10 @@ export const commandData = new SlashCommandBuilder()
   .setDescription("Manage RSS feeds for this server (or your DMs)")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
+  .setIntegrationTypes(
+    ApplicationIntegrationType.GuildInstall,
+    ApplicationIntegrationType.UserInstall
+  )
   .addSubcommand((sub) =>
     sub
       .setName("add")
@@ -77,6 +82,18 @@ async function handleAdd(interaction) {
     interaction.options.getChannel("channel")?.id ?? interaction.channelId;
   const inDM = !interaction.guildId;
   const where = inDM ? "right here in our DMs" : `<#${channelId}>`;
+
+  // User-installed apps can invoke commands in servers the bot isn't a
+  // member of — but it can't post there without being added.
+  if (interaction.guildId && !interaction.guild) {
+    return interaction.reply({
+      content:
+        "I can't post in this server because I'm not a member here. " +
+        "Add me first, or DM me to get feeds there instead: " +
+        "<https://discord.com/oauth2/authorize?client_id=1524834504915681340&scope=bot+applications.commands&permissions=536889344>",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
